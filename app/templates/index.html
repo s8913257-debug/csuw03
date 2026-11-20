@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}首頁總覽 — {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ app_title }}</h1>
+    <p class="page-subtitle">歡迎使用，{{ user.display_name }}。請從左側選單或下方分類選擇實驗室小工具。</p>
+  </div>
+  <a href="/history" class="btn btn-secondary">查看歷史紀錄</a>
+</div>
+
+<div class="category-grid">
+  {% for cat in categories %}
+  <div class="category-card">
+    <h3>{{ cat }}</h3>
+    {% set cat_tools = tools_by_category.get(cat, []) %}
+    {% if cat_tools %}
+      {% for tool in cat_tools %}
+      <a href="{{ tool.url }}" class="tool-link-box">
+        <div class="tool-link-name">{{ tool.name }}</div>
+        <div class="tool-link-desc">{{ tool.description }}</div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <p style="color: var(--muted); font-size: 14px; margin: 8px 0 0;">此分類目前尚未新增工具。</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

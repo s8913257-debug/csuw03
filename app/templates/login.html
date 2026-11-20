@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登入 — {{ app_title }}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-box">
+      <h1>{{ app_title }}</h1>
+      <p class="page-subtitle" style="margin-bottom: 20px;">請使用實驗室個人帳號登入系統</p>
+
+      {% if error %}
+      <div class="alert alert-error">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/login">
+        <div class="form-group">
+          <label for="username">帳號</label>
+          <input type="text" id="username" name="username" required autofocus />
+        </div>
+        <div class="form-group">
+          <label for="password">密碼</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 6px;">登入</button>
+      </form>
+
+      <div class="alert alert-info" style="margin-top: 18px; margin-bottom: 0; font-size: 13px;">
+        首次啟用預設管理員帳號：<code>admin</code> / 密碼：<code>admin1234</code><br />
+        登入後請至「帳號管理」重設密碼並建立同事帳號。
+      </div>
+    </div>
+  </div>
+</body>
+</html>

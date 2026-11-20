@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}實驗室歷史紀錄 — {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">實驗室歷史紀錄</h1>
+    <p class="page-subtitle">團隊共享紀錄，可依分類、批號／檔名或處理人員搜尋與下載。</p>
+  </div>
+</div>
+
+{% if msg %}
+<div class="alert alert-success">{{ msg }}</div>
+{% endif %}
+{% if err %}
+<div class="alert alert-error">{{ err }}</div>
+{% endif %}
+
+<div class="card">
+  <form method="get" action="/history" class="form-row">
+    <div class="form-group">
+      <label for="q">關鍵字（批號 / 檔名 / 工具 / 備註）</label>
+      <input type="text" id="q" name="q" value="{{ q }}" placeholder="輸入批號或檔名..." />
+    </div>
+    <div class="form-group" style="max-width: 180px;">
+      <label for="category">分類</label>
+      <select id="category" name="category">
+        <option value="">全部分類</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="max-width: 180px;">
+      <label for="operator">處理人員</label>
+      <input type="text" id="operator" name="operator" value="{{ operator }}" placeholder="姓名或帳號" />
+    </div>
+    <div class="form-group" style="flex: 0;">
+      <button type="submit" class="btn btn-primary">搜尋</button>
+    </div>
+    <div class="form-group" style="flex: 0;">
+      <a href="/history" class="btn btn-secondary">清除</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  {% if records %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>分類</th>
+          <th>使用工具</th>
+          <th>批號 / 檔名</th>
+          <th>筆數</th>
+          <th>處理人員</th>
+          <th>處理時間</th>
+          <th>備註</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records %}
+        <tr>
+          <td>{{ rec.id }}</td>
+          <td><span class="badge badge-blue">{{ rec.category }}</span></td>
+          <td>{{ rec.tool_name }}</td>
+          <td><strong>{{ rec.batch_or_filename }}</strong></td>
+          <td>{{ rec.row_count }}</td>
+          <td>{{ rec.user_display_name }}</td>
+          <td>{{ rec.created_at }}</td>
+          <td>{{ rec.note or "-" }}</td>
+          <td>
+            <a href="/history/{{ rec.id }}" class="btn btn-secondary btn-sm">檢視</a>
+            <a href="/history/{{ rec.id }}/download?fmt=xlsx" class="btn btn-secondary btn-sm">Excel</a>
+            <a href="/history/{{ rec.id }}/download?fmt=csv" class="btn btn-secondary btn-sm">CSV</a>
+            {% if user.role == "admin" or rec.user_id == user.id %}
+            <form method="post" action="/history/{{ rec.id }}/delete" style="display: inline;" onsubmit="return confirm('確定要刪除這筆紀錄嗎？');">
+              <button type="submit" class="btn btn-danger btn-sm">刪除</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color: var(--muted); margin: 0;">目前沒有符合條件的歷史紀錄。</p>
+  {% endif %}
+</div>
+{% endblock %}

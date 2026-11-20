@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}{{ app_title }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="topbar-brand">{{ app_title }}</a>
+    {% if user %}
+    <div class="topbar-user">
+      <span class="user-badge">{{ user.display_name }}（{{ user.username }}）</span>
+      <a href="/history" class="topbar-link">歷史紀錄</a>
+      {% if user.role == "admin" %}
+      <a href="/admin/users" class="topbar-link">帳號管理</a>
+      {% endif %}
+      <a href="/logout" class="topbar-link">登出</a>
+    </div>
+    {% endif %}
+  </header>
+
+  <div class="layout">
+    {% if user %}
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <a href="/" class="nav-item {% if request.url.path == '/' %}active{% endif %}">首頁總覽</a>
+        <a href="/history" class="nav-item {% if request.url.path.startswith('/history') %}active{% endif %}">實驗室歷史紀錄</a>
+      </div>
+
+      {% for cat in categories %}
+      <div class="sidebar-section">
+        <div class="sidebar-title">{{ cat }}</div>
+        {% set cat_tools = tools_by_category.get(cat, []) %}
+        {% if cat_tools %}
+          {% for tool in cat_tools %}
+          <a href="{{ tool.url }}" class="nav-item {% if request.url.path.startswith(tool.url) %}active{% endif %}">
+            {{ tool.name }}
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="nav-empty">尚無工具</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </aside>
+    {% endif %}
+
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

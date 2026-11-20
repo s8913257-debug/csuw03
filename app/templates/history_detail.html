@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}紀錄明細 #{{ record.id }} — {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+  <div>
+    <h1 class="page-title">歷史紀錄明細 #{{ record.id }}</h1>
+    <p class="page-subtitle">{{ record.category }} / {{ record.tool_name }}</p>
+  </div>
+  <div>
+    <button onclick="window.print()" class="btn btn-secondary">列印 / 另存 PDF</button>
+    <a href="/history/{{ record.id }}/download?fmt=xlsx" class="btn btn-primary">下載 Excel (.xlsx)</a>
+    <a href="/history/{{ record.id }}/download?fmt=csv" class="btn btn-secondary">下載 CSV</a>
+    <a href="/history" class="btn btn-secondary">返回列表</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="card-title">{{ record.tool_name }} — 處理結果報表</h2>
+  <p style="font-size: 14px; color: var(--muted); margin: 0 0 12px;">
+    <strong>批號 / 檔名：</strong>{{ record.batch_or_filename }} ｜
+    <strong>處理人員：</strong>{{ record.user_display_name }}（{{ record.username }}）｜
+    <strong>處理時間：</strong>{{ record.created_at }} ｜
+    <strong>總筆數：</strong>{{ record.row_count }}
+    {% if record.note %}｜<strong>備註：</strong>{{ record.note }}{% endif %}
+  </p>
+  {% if record.summary %}
+  <div class="alert alert-info" style="margin-bottom: 14px;">{{ record.summary }}</div>
+  {% endif %}
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          {% for col in record.columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in record.rows %}
+        <tr>
+          {% for col in record.columns %}
+          <td>{{ row.get(col, "") }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
