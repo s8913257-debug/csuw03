@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from app.config import get_secret_key
+from app.config import AUTH_ENABLED, get_secret_key
 from app.core.db import get_db, hash_password, verify_password
 
 SESSION_COOKIE_NAME = "lab_toolbox_session"
@@ -29,7 +29,22 @@ def _read_session_token(token: str) -> int | None:
 
 
 def get_current_user(request: Request) -> dict[str, Any] | None:
-    """從 Cookie 讀取目前登入的使用者資料；未登入或無效則回傳 None。"""
+    """從 Cookie 讀取目前登入的使用者資料；若暫時關閉登入則直接回傳預設實驗室人員。"""
+    if not AUTH_ENABLED:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT id, username, display_name, role, is_active FROM users ORDER BY id ASC LIMIT 1"
+            ).fetchone()
+        if row:
+            return dict(row)
+        return {
+            "id": 1,
+            "username": "lab",
+            "display_name": "實驗室人員",
+            "role": "admin",
+            "is_active": 1,
+        }
+
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
         return None
@@ -66,7 +81,7 @@ def require_admin(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any
 
 @router.get("/login")
 def login_page(request: Request):
-    if get_current_user(request):
+    if not AUTH_ENABLED or get_current_user(request):
         return RedirectResponse(url="/", status_code=303)
     templates = request.app.state.templates
     return templates.TemplateResponse(

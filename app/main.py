@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.config import APP_TITLE, CATEGORIES
+from app.config import APP_TITLE, AUTH_ENABLED, CATEGORIES
 from app.core import auth, history
 from app.core.auth import require_user
 from app.core.db import init_db
@@ -27,6 +27,7 @@ app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 templates = Jinja2Templates(directory=APP_DIR / "templates")
 templates.env.globals["app_title"] = APP_TITLE
+templates.env.globals["auth_enabled"] = AUTH_ENABLED
 templates.env.globals["categories"] = CATEGORIES
 templates.env.globals["tools_by_category"] = get_tools_by_category()
 app.state.templates = templates

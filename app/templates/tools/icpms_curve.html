@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+{% block title %}{{ tool_name }} — {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+  <div>
+    <h1 class="page-title">{{ tool_name }}</h1>
+    <p class="page-subtitle">{{ tool_category }} ｜ {{ tool_desc }}</p>
+  </div>
+  <button type="button" class="btn btn-secondary" onclick="loadSampleData()">載入範例數據</button>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/tools/icpms_curve" class="card no-print">
+  <h2 class="card-title">1. 基本設定</h2>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="batch_name">分析元素 / 批號名稱</label>
+      <input type="text" id="batch_name" name="batch_name" value="{{ form_state.batch_name }}" placeholder="例如：Pb-208 批號 1120" />
+    </div>
+    <div class="form-group" style="max-width: 140px;">
+      <label for="unit">濃度單位</label>
+      <input type="text" id="unit" name="unit" value="{{ form_state.unit }}" placeholder="µg/L" />
+    </div>
+    <div class="form-group">
+      <label for="weighting">迴歸方式</label>
+      <select id="weighting" name="weighting">
+        {% for key, label in weighting_labels.items() %}
+        <option value="{{ key }}" {% if form_state.weighting == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="max-width: 150px;">
+      <label for="r2_threshold">R² 合格門檻</label>
+      <input type="text" id="r2_threshold" name="r2_threshold" value="{{ form_state.r2_threshold }}" />
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; margin: 16px 0 8px;">
+    <h2 class="card-title" style="margin: 0;">2. 檢量線標準品（可直接從 Excel 複製多列貼上）</h2>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="addStdRow()">＋ 新增標準品</button>
+  </div>
+  <div class="table-wrap" style="margin-bottom: 16px;">
+    <table id="std-table">
+      <thead>
+        <tr>
+          <th style="width: 70px;">點位</th>
+          <th>設定濃度（x）</th>
+          <th>儀器訊號 CPS / Ratio（y）</th>
+          <th style="width: 80px;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in form_state.std_rows %}
+        <tr>
+          <td class="row-idx">Std-{{ loop.index }}</td>
+          <td><input type="text" name="std_conc" value="{{ row.conc }}" placeholder="例如：10" onpaste="handleTablePaste(event, 'std-table')" /></td>
+          <td><input type="text" name="std_signal" value="{{ row.signal }}" placeholder="例如：12540" onpaste="handleTablePaste(event, 'std-table')" /></td>
+          <td><button type="button" class="btn btn-secondary btn-sm" onclick="removeRow(this, 'std-table', 'Std-')">刪除</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; margin: 16px 0 8px;">
+    <h2 class="card-title" style="margin: 0;">3. 未知樣品反算（選填，可從 Excel 貼上）</h2>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="addUnkRow()">＋ 新增樣品</button>
+  </div>
+  <div class="table-wrap" style="margin-bottom: 16px;">
+    <table id="unk-table">
+      <thead>
+        <tr>
+          <th>樣品編號</th>
+          <th>儀器訊號（y）</th>
+          <th style="width: 140px;">稀釋倍數（預設 1）</th>
+          <th style="width: 80px;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in form_state.unk_rows %}
+        <tr>
+          <td><input type="text" name="unk_id" value="{{ row.sample_id }}" placeholder="例如：W-101" onpaste="handleTablePaste(event, 'unk-table')" /></td>
+          <td><input type="text" name="unk_signal" value="{{ row.signal }}" placeholder="例如：4520" onpaste="handleTablePaste(event, 'unk-table')" /></td>
+          <td><input type="text" name="unk_df" value="{{ row.df }}" placeholder="1" onpaste="handleTablePaste(event, 'unk-table')" /></td>
+          <td><button type="button" class="btn btn-secondary btn-sm" onclick="removeRow(this, 'unk-table', '')">刪除</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="form-group">
+    <label for="note">備註（選填）</label>
+    <input type="text" id="note" name="note" value="{{ form_state.note }}" placeholder="可填寫儀器條件或備註..." />
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 8px;">
+    <label style="display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 0; cursor: pointer;">
+      <input type="checkbox" name="save_to_history" value="true" checked style="width: auto;" />
+      同時儲存至實驗室歷史紀錄
+    </label>
+    <button type="submit" class="btn btn-primary">計算檢量線</button>
+  </div>
+</form>
+
+{% if result %}
+<div class="card">
+  <div class="page-header no-print" style="margin-bottom: 12px;">
+    <div>
+      <h2 class="card-title" style="margin-bottom: 4px;">
+        檢量線計算結果
+        {% if result.passed %}
+        <span class="badge badge-green" style="margin-left: 8px;">{{ result.status_text }}（R² ≥ {{ result.threshold }}）</span>
+        {% else %}
+        <span class="badge badge-red" style="margin-left: 8px;">{{ result.status_text }}（R² &lt; {{ result.threshold }}）</span>
+        {% endif %}
+      </h2>
+      <p style="margin: 0; font-size: 14px; color: var(--muted);">
+        {{ result.weighting_label }}
+        {% if result.history_id %}
+        ｜ 已存入 <a href="/history/{{ result.history_id }}">歷史紀錄 #{{ result.history_id }}</a>
+        {% endif %}
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <form method="post" action="/tools/icpms_curve/download" style="display: inline;">
+        <input type="hidden" name="payload_json" value="{{ result.payload_json }}" />
+        <input type="hidden" name="fmt" value="xlsx" />
+        <button type="submit" class="btn btn-primary btn-sm">下載 Excel (.xlsx)</button>
+      </form>
+      <form method="post" action="/tools/icpms_curve/download" style="display: inline;">
+        <input type="hidden" name="payload_json" value="{{ result.payload_json }}" />
+        <input type="hidden" name="fmt" value="csv" />
+        <button type="submit" class="btn btn-secondary btn-sm">下載 CSV</button>
+      </form>
+      <button onclick="window.print()" class="btn btn-secondary btn-sm">列印 / 另存 PDF</button>
+    </div>
+  </div>
+
+  <div class="alert {% if result.passed %}alert-success{% else %}alert-error{% endif %}">
+    <strong>線性方程式：</strong><code>{{ result.equation }}</code> ｜
+    <strong>斜率 (a)：</strong><code>{{ result.slope }}</code> ｜
+    <strong>截距 (b)：</strong><code>{{ result.intercept }}</code> ｜
+    <strong>R²：</strong><code>{{ result.r2 }}</code>
+  </div>
+
+  <div style="margin-bottom: 20px; text-align: center;">
+    <svg viewBox="0 0 {{ result.svg.width }} {{ result.svg.height }}" style="max-width: 680px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fff;">
+      <!-- Grid lines -->
+      {% for t in result.svg.x_ticks %}
+      <line x1="{{ t.pos }}" y1="{{ result.svg.pad_t }}" x2="{{ t.pos }}" y2="{{ result.svg.pad_t + result.svg.plot_h }}" stroke="#eef2f6" stroke-width="1" />
+      <text x="{{ t.pos }}" y="{{ result.svg.pad_t + result.svg.plot_h + 18 }}" text-anchor="middle" font-size="11" fill="#64748b">{{ t.label }}</text>
+      {% endfor %}
+      {% for t in result.svg.y_ticks %}
+      <line x1="{{ result.svg.pad_l }}" y1="{{ t.pos }}" x2="{{ result.svg.pad_l + result.svg.plot_w }}" y2="{{ t.pos }}" stroke="#eef2f6" stroke-width="1" />
+      <text x="{{ result.svg.pad_l - 8 }}" y="{{ t.pos + 4 }}" text-anchor="end" font-size="11" fill="#64748b">{{ t.label }}</text>
+      {% endfor %}
+
+      <!-- Axes -->
+      <line x1="{{ result.svg.pad_l }}" y1="{{ result.svg.pad_t }}" x2="{{ result.svg.pad_l }}" y2="{{ result.svg.pad_t + result.svg.plot_h }}" stroke="#475569" stroke-width="1.5" />
+      <line x1="{{ result.svg.pad_l }}" y1="{{ result.svg.pad_t + result.svg.plot_h }}" x2="{{ result.svg.pad_l + result.svg.plot_w }}" y2="{{ result.svg.pad_t + result.svg.plot_h }}" stroke="#475569" stroke-width="1.5" />
+
+      <!-- Axis labels -->
+      <text x="{{ result.svg.pad_l + result.svg.plot_w / 2 }}" y="{{ result.svg.height - 8 }}" text-anchor="middle" font-size="12" fill="#334155">濃度 ({{ result.svg.unit }})</text>
+      <text x="16" y="{{ result.svg.pad_t + result.svg.plot_h / 2 }}" text-anchor="middle" font-size="12" fill="#334155" transform="rotate(-90 16 {{ result.svg.pad_t + result.svg.plot_h / 2 }})">儀器訊號</text>
+
+      <!-- Regression line -->
+      <line x1="{{ result.svg.line.x1 }}" y1="{{ result.svg.line.y1 }}" x2="{{ result.svg.line.x2 }}" y2="{{ result.svg.line.y2 }}" stroke="#2563eb" stroke-width="2" />
+
+      <!-- Standard points -->
+      {% for p in result.svg.std_points %}
+      <circle cx="{{ p.cx }}" cy="{{ p.cy }}" r="4.5" fill="#1d4ed8" stroke="#ffffff" stroke-width="1.5">
+        <title>標準品 {{ p.label }}</title>
+      </circle>
+      {% endfor %}
+
+      <!-- Unknown points -->
+      {% for p in result.svg.unk_points %}
+      <rect x="{{ p.cx - 4 }}" y="{{ p.cy - 4 }}" width="8" height="8" fill="#059669" stroke="#ffffff" stroke-width="1.2">
+        <title>{{ p.label }}</title>
+      </rect>
+      {% endfor %}
+    </svg>
+    <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+      藍色圓點：標準品（Standard）　｜　綠色方點：未知樣品　｜　藍線：迴歸直線
+    </div>
+  </div>
+
+  <h3 style="margin: 0 0 8px; font-size: 16px;">標準品回算與誤差檢查</h3>
+  <div class="table-wrap" style="margin-bottom: 20px;">
+    <table>
+      <thead>
+        <tr>
+          <th>點位</th>
+          <th>設定濃度 ({{ result.unit }})</th>
+          <th>儀器訊號</th>
+          <th>回算濃度 ({{ result.unit }})</th>
+          <th>相對誤差 (%RE)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in result.std_results %}
+        <tr>
+          <td>{{ s["點位"] }}</td>
+          <td>{{ s["設定濃度"] }}</td>
+          <td>{{ s["儀器訊號"] }}</td>
+          <td>{{ s["回算濃度"] }}</td>
+          <td>{{ s["相對誤差 (%RE)"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if result.unk_results %}
+  <h3 style="margin: 0 0 8px; font-size: 16px;">未知樣品反算結果</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>樣品編號</th>
+          <th>儀器訊號</th>
+          <th>稀釋倍數</th>
+          <th>上機回算濃度 ({{ result.unit }})</th>
+          <th>最終濃度 ({{ result.unit }})</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in result.unk_results %}
+        <tr>
+          <td><strong>{{ u["編號"] }}</strong></td>
+          <td>{{ u["儀器訊號"] }}</td>
+          <td>{{ u["稀釋倍數"] }}</td>
+          <td>{{ u["上機回算濃度 (" ~ result.unit ~ ")"] }}</td>
+          <td><strong>{{ u["最終濃度 (" ~ result.unit ~ ")"] }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+function renumberStd() {
+  const rows = document.querySelectorAll("#std-table tbody tr");
+  rows.forEach((tr, idx) => {
+    const cell = tr.querySelector(".row-idx");
+    if (cell) cell.textContent = "Std-" + (idx + 1);
+  });
+}
+
+function addStdRow(conc = "", signal = "") {
+  const tbody = document.querySelector("#std-table tbody");
+  const idx = tbody.querySelectorAll("tr").length + 1;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td class="row-idx">Std-${idx}</td>
+    <td><input type="text" name="std_conc" value="${conc}" placeholder="例如：10" onpaste="handleTablePaste(event, 'std-table')" /></td>
+    <td><input type="text" name="std_signal" value="${signal}" placeholder="例如：12540" onpaste="handleTablePaste(event, 'std-table')" /></td>
+    <td><button type="button" class="btn btn-secondary btn-sm" onclick="removeRow(this, 'std-table', 'Std-')">刪除</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addUnkRow(sid = "", signal = "", df = "1") {
+  const tbody = document.querySelector("#unk-table tbody");
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input type="text" name="unk_id" value="${sid}" placeholder="例如：W-101" onpaste="handleTablePaste(event, 'unk-table')" /></td>
+    <td><input type="text" name="unk_signal" value="${signal}" placeholder="例如：4520" onpaste="handleTablePaste(event, 'unk-table')" /></td>
+    <td><input type="text" name="unk_df" value="${df}" placeholder="1" onpaste="handleTablePaste(event, 'unk-table')" /></td>
+    <td><button type="button" class="btn btn-secondary btn-sm" onclick="removeRow(this, 'unk-table', '')">刪除</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function removeRow(btn, tableId, prefix) {
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  if (tbody.querySelectorAll("tr").length <= 1) return;
+  btn.closest("tr").remove();
+  if (prefix) renumberStd();
+}
+
+function handleTablePaste(event, tableId) {
+  const text = (event.clipboardData || window.clipboardData).getData("text");
+  if (!text || (!text.includes("\t") && !text.includes("\n"))) return;
+
+  event.preventDefault();
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter(l => l.trim() !== "");
+  const startInput = event.target;
+  const startTr = startInput.closest("tr");
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  const inputsInRow = Array.from(startTr.querySelectorAll("input"));
+  const startCol = inputsInRow.indexOf(startInput);
+  const startRow = Array.from(tbody.querySelectorAll("tr")).indexOf(startTr);
+
+  lines.forEach((line, rOffset) => {
+    const cells = line.split("\t");
+    while (tbody.querySelectorAll("tr").length <= startRow + rOffset) {
+      if (tableId === "std-table") addStdRow();
+      else addUnkRow();
+    }
+    const targetTr = tbody.querySelectorAll("tr")[startRow + rOffset];
+    const rowInputs = targetTr.querySelectorAll("input");
+    cells.forEach((val, cOffset) => {
+      if (startCol + cOffset < rowInputs.length) {
+        rowInputs[startCol + cOffset].value = val.trim();
+      }
+    });
+  });
+}
+
+function loadSampleData() {
+  document.getElementById("batch_name").value = "Pb-208 教學範例";
+  document.getElementById("unit").value = "µg/L";
+  document.getElementById("weighting").value = "1/x";
+  document.getElementById("r2_threshold").value = "0.995";
+
+  const stdBody = document.querySelector("#std-table tbody");
+  stdBody.innerHTML = "";
+  const sampleStd = [
+    ["1", "1280"],
+    ["5", "6150"],
+    ["10", "12420"],
+    ["25", "30850"],
+    ["50", "61900"],
+  ];
+  sampleStd.forEach(([c, s]) => addStdRow(c, s));
+
+  const unkBody = document.querySelector("#unk-table tbody");
+  unkBody.innerHTML = "";
+  const sampleUnk = [
+    ["W-101", "4250", "1"],
+    ["W-103", "15800", "10"],
+  ];
+  sampleUnk.forEach(([id, sig, df]) => addUnkRow(id, sig, df));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}{{ tool_name }} — {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+  <div>
+    <h1 class="page-title">{{ tool_name }}</h1>
+    <p class="page-subtitle">{{ tool_category }} ｜ {{ tool_desc }}</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card no-print">
+  <h2 class="card-title">使用說明與欄位範例</h2>
+  <ul style="margin: 0 0 12px; padding-left: 20px; font-size: 14px;">
+    <li>支援檔案格式：<code>.csv</code>（自動相容 UTF-8 / Big5）、<code>.xlsx</code>、<code>.xls</code>。</li>
+    <li>必要欄位：<code>樣品編號</code>、<code>樣品類型</code>、<code>元素</code>、<code>上機濃度</code>、<code>單位</code>、<code>稀釋倍數</code>、<code>定容體積 (mL)</code>、<code>樣品重 (g)</code>。</li>
+    <li>單位自動識別（忽略大小寫與前後空白）：<code>ug/L</code>、<code>µg/L</code>、<code>UG/L</code>、<code>ppb</code>、<code>ng/mL</code>、<code>mg/L</code>、<code>ppm</code>。</li>
+    <li>換算規則：<strong>水樣</strong>報 <code>µg/L</code>；<strong>土壤、食品</strong>報 <code>mg/kg</code>；報告濃度四捨五入至小數點後 <strong>3 位</strong>；稀釋倍數空白視為 <code>1</code>。</li>
+  </ul>
+
+  <div class="table-wrap" style="margin-bottom: 16px;">
+    <table>
+      <thead>
+        <tr>
+          <th>樣品編號</th>
+          <th>樣品類型</th>
+          <th>元素</th>
+          <th>上機濃度</th>
+          <th>單位</th>
+          <th>稀釋倍數</th>
+          <th>定容體積 (mL)</th>
+          <th>樣品重 (g)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>W-101</td>
+          <td>水樣</td>
+          <td>Pb</td>
+          <td>3.42</td>
+          <td>ug/L</td>
+          <td>1</td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>S-201</td>
+          <td>土壤</td>
+          <td>Pb</td>
+          <td>25.6</td>
+          <td>ug/L</td>
+          <td>10</td>
+          <td>50</td>
+          <td>0.5012</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="/tools/units" enctype="multipart/form-data">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="file">上傳檢測結果檔案（.csv / .xlsx / .xls）</label>
+        <input type="file" id="file" name="file" accept=".csv,.xlsx,.xls" required />
+      </div>
+      <div class="form-group">
+        <label for="note">備註（選填）</label>
+        <input type="text" id="note" name="note" placeholder="例如：批號或備註說明..." />
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 6px;">
+      <label style="display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 0; cursor: pointer;">
+        <input type="checkbox" name="save_to_history" value="true" checked style="width: auto;" />
+        同時儲存至實驗室歷史紀錄
+      </label>
+      <button type="submit" class="btn btn-primary">開始換算</button>
+    </div>
+  </form>
+</div>
+
+{% if result %}
+<div class="card">
+  <div class="page-header no-print" style="margin-bottom: 14px;">
+    <div>
+      <h2 class="card-title" style="margin-bottom: 4px;">換算結果：{{ result.filename }}</h2>
+      <p style="margin: 0; font-size: 14px; color: var(--muted);">
+        {{ result.summary }}
+        {% if result.history_id %}
+        ｜ 已存入 <a href="/history/{{ result.history_id }}">歷史紀錄 #{{ result.history_id }}</a>
+        {% endif %}
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <form method="post" action="/tools/units/download" style="display: inline;">
+        <input type="hidden" name="payload_json" value="{{ result.payload_json }}" />
+        <input type="hidden" name="fmt" value="xlsx" />
+        <button type="submit" class="btn btn-primary btn-sm">下載 Excel (.xlsx)</button>
+      </form>
+      <form method="post" action="/tools/units/download" style="display: inline;">
+        <input type="hidden" name="payload_json" value="{{ result.payload_json }}" />
+        <input type="hidden" name="fmt" value="csv" />
+        <button type="submit" class="btn btn-secondary btn-sm">下載 CSV</button>
+      </form>
+      <button onclick="window.print()" class="btn btn-secondary btn-sm">列印 / 另存 PDF</button>
+    </div>
+  </div>
+
+  {% if result.error_count > 0 %}
+  <div class="alert alert-error">
+    注意：共有 <strong>{{ result.error_count }}</strong> 筆資料無法換算（已保留空白並於「狀態／備註」欄標示原因），請實驗室人員覆核。
+  </div>
+  {% else %}
+  <div class="alert alert-success">
+    全部 <strong>{{ result.total_count }}</strong> 筆資料皆已成功完成換算。
+  </div>
+  {% endif %}
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          {% for col in result.columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in result.rows %}
+        <tr {% if row["狀態／備註"] != "正常" %}style="background: #fef2f2;"{% endif %}>
+          {% for col in result.columns %}
+          <td>
+            {% if col == "報告濃度" and row[col] %}
+              <strong>{{ row[col] }}</strong>
+            {% elif col == "狀態／備註" and row[col] != "正常" %}
+              <span class="badge badge-red">{{ row[col] }}</span>
+            {% elif col == "狀態／備註" %}
+              <span class="badge badge-green">{{ row[col] }}</span>
+            {% else %}
+              {{ row[col] }}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

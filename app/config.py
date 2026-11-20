@@ -11,7 +11,10 @@ SECRET_KEY_PATH = BASE_DIR / ".secret_key"
 
 APP_TITLE = "濫用藥物實驗室工具箱"
 
-# 六大工具分類（依 SPEC.md 規範）
+# 暫時關閉帳號密碼登入（設為 True 即可重新啟用登入驗證）
+AUTH_ENABLED = False
+
+# 七大工具分類（依 SPEC.md 規範）
 CATEGORIES = [
     "收樣",
     "初篩檢驗",
@@ -19,6 +22,7 @@ CATEGORIES = [
     "品管工具",
     "帳款",
     "藥品管理",
+    "上課工具",
 ]
 
 

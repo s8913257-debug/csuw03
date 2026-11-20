@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}{{ tool_name }} — {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+  <div>
+    <h1 class="page-title">{{ tool_name }}</h1>
+    <p class="page-subtitle">{{ tool_category }} ｜ {{ tool_desc }}</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card no-print">
+  <h2 class="card-title">使用說明與預設容許量</h2>
+  <ul style="margin: 0 0 14px; padding-left: 20px; font-size: 14px;">
+    <li>可一次選取多個批次檔（支援 <code>.csv</code>、<code>.xlsx</code>、<code>.xls</code>），自動相容不同人員匯出的欄位與大小寫農藥名稱。</li>
+    <li>濃度為 <code>&lt;LOQ</code> 時<strong>不判定為超標</strong>；僅可量化數值 <code>&gt; 示範容許量</code> 列入超標清單。</li>
+  </ul>
+
+  <div class="table-wrap" style="margin-bottom: 16px;">
+    <table>
+      <thead>
+        <tr>
+          <th>農藥名稱</th>
+          <th>示範容許量 (mg/kg)</th>
+          <th>LOQ (mg/kg)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lim in default_limits %}
+        <tr>
+          <td>{{ lim.name }}</td>
+          <td>{{ lim.limit }}</td>
+          <td>{{ lim.loq }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="/tools/merge" enctype="multipart/form-data">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="files">選擇多個批次檢測檔（可按住 Ctrl / Shift 多選）</label>
+        <input type="file" id="files" name="files" accept=".csv,.xlsx,.xls" multiple required />
+      </div>
+      <div class="form-group">
+        <label for="limits_file">自訂容許量對照表（選填，未上傳則使用上方預設表）</label>
+        <input type="file" id="limits_file" name="limits_file" accept=".csv,.xlsx,.xls" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="note">備註（選填）</label>
+      <input type="text" id="note" name="note" placeholder="例如：9–10 月蔬菜農殘三週彙整" />
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 6px;">
+      <label style="display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 0; cursor: pointer;">
+        <input type="checkbox" name="save_to_history" value="true" checked style="width: auto;" />
+        同時儲存至實驗室歷史紀錄
+      </label>
+      <button type="submit" class="btn btn-primary">開始彙整</button>
+    </div>
+  </form>
+</div>
+
+{% if result %}
+<div class="card">
+  <div class="page-header no-print" style="margin-bottom: 12px;">
+    <div>
+      <h2 class="card-title" style="margin-bottom: 4px;">彙整結果摘要</h2>
+      <p style="margin: 0; font-size: 14px; color: var(--muted);">
+        {{ result.summary_text }}
+        {% if result.history_id %}
+        ｜ 已存入 <a href="/history/{{ result.history_id }}">歷史紀錄 #{{ result.history_id }}</a>
+        {% endif %}
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <form method="post" action="/tools/merge/download" style="display: inline;">
+        <input type="hidden" name="payload_json" value="{{ result.payload_json }}" />
+        <input type="hidden" name="target" value="xlsx" />
+        <button type="submit" class="btn btn-primary btn-sm">下載 Excel（含兩工作表）</button>
+      </form>
+      <form method="post" action="/tools/merge/download" style="display: inline;">
+        <input type="hidden" name="payload_json" value="{{ result.payload_json }}" />
+        <input type="hidden" name="target" value="csv_exceedances" />
+        <button type="submit" class="btn btn-secondary btn-sm">下載超標清單 CSV</button>
+      </form>
+      <form method="post" action="/tools/merge/download" style="display: inline;">
+        <input type="hidden" name="payload_json" value="{{ result.payload_json }}" />
+        <input type="hidden" name="target" value="csv_summary" />
+        <button type="submit" class="btn btn-secondary btn-sm">下載彙整總表 CSV</button>
+      </form>
+      <button onclick="window.print()" class="btn btn-secondary btn-sm">列印 / 另存 PDF</button>
+    </div>
+  </div>
+
+  {% if result.exceedance_count > 0 %}
+  <div class="alert alert-error">
+    發現 <strong>{{ result.exceedance_count }}</strong> 筆超過示範容許量（總計 {{ result.total_count }} 筆，&lt;LOQ 共 {{ result.loq_count }} 筆）。
+  </div>
+  {% else %}
+  <div class="alert alert-success">
+    本次彙整共 {{ result.total_count }} 筆，無超過示範容許量之項目（&lt;LOQ 共 {{ result.loq_count }} 筆）。
+  </div>
+  {% endif %}
+
+  <h3 style="margin: 0 0 8px; font-size: 16px;">1. 超標清單（共 {{ result.exceedance_count }} 筆）</h3>
+  {% if result.exceedances %}
+  <div class="table-wrap" style="margin-bottom: 24px;">
+    <table>
+      <thead>
+        <tr>
+          {% for col in result.exceedance_columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in result.exceedances %}
+        <tr style="background: #fef2f2;">
+          {% for col in result.exceedance_columns %}
+          <td>
+            {% if col == "濃度 (mg/kg)" %}
+            <strong style="color: #991b1b;">{{ row[col] }}</strong>
+            {% else %}
+            {{ row[col] }}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color: var(--muted); margin: 0 0 20px;">無超標項目。</p>
+  {% endif %}
+
+  <h3 style="margin: 0 0 8px; font-size: 16px;">2. 多批次彙整總表（共 {{ result.total_count }} 筆）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          {% for col in result.summary_columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in result.summary_rows %}
+        <tr {% if row["判定結果"] == "超標" %}style="background: #fef2f2;"{% endif %}>
+          {% for col in result.summary_columns %}
+          <td>
+            {% if col == "判定結果" %}
+              {% if row[col] == "超標" %}
+              <span class="badge badge-red">超標</span>
+              {% elif row[col] == "<LOQ" %}
+              <span class="badge">&lt;LOQ</span>
+              {% elif row[col] == "正常" %}
+              <span class="badge badge-green">正常</span>
+              {% else %}
+              <span class="badge badge-blue">{{ row[col] }}</span>
+              {% endif %}
+            {% else %}
+              {{ row[col] }}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

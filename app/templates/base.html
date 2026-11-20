@@ -11,12 +11,14 @@
     <a href="/" class="topbar-brand">{{ app_title }}</a>
     {% if user %}
     <div class="topbar-user">
-      <span class="user-badge">{{ user.display_name }}（{{ user.username }}）</span>
       <a href="/history" class="topbar-link">歷史紀錄</a>
+      {% if auth_enabled %}
+      <span class="user-badge">{{ user.display_name }}（{{ user.username }}）</span>
       {% if user.role == "admin" %}
       <a href="/admin/users" class="topbar-link">帳號管理</a>
       {% endif %}
       <a href="/logout" class="topbar-link">登出</a>
+      {% endif %}
     </div>
     {% endif %}
   </header>

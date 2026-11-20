@@ -1,22 +1,12 @@
-from dataclasses import dataclass
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 
 from app.config import CATEGORIES
-
-
-@dataclass
-class ToolEntry:
-    id: str
-    name: str
-    category: str
-    description: str
-    router: APIRouter
-
-    @property
-    def url(self) -> str:
-        return f"/tools/{self.id}"
+from app.tools import ToolEntry
+from app.tools.icpms_curve import TOOL_ENTRY as icpms_curve_tool
+from app.tools.merge import TOOL_ENTRY as merge_tool
+from app.tools.units import TOOL_ENTRY as units_tool
 
 
 # =====================================================================
@@ -28,9 +18,9 @@ class ToolEntry:
 # =====================================================================
 
 TOOL_REGISTRY: list[ToolEntry] = [
-    # 範例：
-    # from app.tools.my_new_tool import TOOL_ENTRY as my_new_tool
-    # 加入清單中即可自動出現在側邊欄與首頁對應分類
+    units_tool,
+    icpms_curve_tool,
+    merge_tool,
 ]
 
 
